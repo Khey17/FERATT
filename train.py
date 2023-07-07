@@ -7,14 +7,15 @@ import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler, WeightedRandomSampler
-from torchvision import transforms, utils
+# from torchvision import transforms, utils
 
-from torchlib.datasets.fersynthetic  import SyntheticFaceDataset, SecuencialSyntheticFaceDataset
-from torchlib.datasets.factory  import FactoryDataset
-from torchlib.attentionnet import AttentionNeuralNet, AttentionSTNNeuralNet, AttentionGMMNeuralNet, AttentionGMMSTNNeuralNet
+# from torchlib.datasets.fersynthetic  import SyntheticFaceDataset, SecuencialSyntheticFaceDataset
+# from torchlib.datasets.factory  import FactoryDataset
+from model import Model
+import utils_2
 
-from pytvision.transforms import transforms as mtrans
-from pytvision import visualization as view
+from torchlib.transforms import transforms as mtrans
+from torchlib import visualization as view
 
 import datetime
 from argparse import ArgumentParser
@@ -102,6 +103,7 @@ def main():
     parser = arg_parser()
     args = parser.parse_args()
     imsize = args.image_size
+    dataset_name = args.dataset_name
     parallel=args.parallel
     num_classes=args.num_classes
     num_channels=args.channels
@@ -112,10 +114,7 @@ def main():
 
     fname = args.name_method
     fnet = {
-        'attnet':AttentionNeuralNet,
-        'attstnnet':AttentionSTNNeuralNet,
-        'attgmmnet':AttentionGMMNeuralNet,
-        'attgmmstnnet':AttentionGMMSTNNeuralNet
+        'model': Model
         }
 
     network = fnet[fname](
@@ -151,25 +150,10 @@ def main():
     nactores=args.nactor
     idenselect = np.arange(nactores) + kfold*nactores
 
-    # datasets
+    # datasets utils_2.get_dataset(dataset_name, M_view, N_view, root)
     # training dataset
     # SyntheticFaceDataset, SecuencialSyntheticFaceDataset
-    train_data = SecuencialSyntheticFaceDataset(
-        data=FactoryDataset.factory(
-            pathname=args.data,
-            name=args.name_dataset,
-            subset=FactoryDataset.training,
-            idenselect=idenselect,
-            download=True
-            ),
-        pathnameback=args.databack,
-        ext='jpg',
-        count=trainiteration,
-        num_channels=num_channels,
-        iluminate=True, angle=30, translation=0.2, warp=0.1, factor=0.2,
-        transform_data=get_transforms_aug( imsize ),
-        transform_image=get_transforms_det( imsize ),
-        )
+    train_data, val_data = utils_2.get_dataset(dataset_name, 2, 1, root='./data/')
 
 
     num_train = len(train_data)
@@ -182,31 +166,29 @@ def main():
         sampler = SubsetRandomSampler(np.random.permutation( num_train ) )
 
 
-    train_loader = DataLoader(train_data, batch_size=args.batch_size,
-        num_workers=args.workers, pin_memory=network.cuda, drop_last=True, sampler=sampler ) #shuffle=True,
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)#shuffle=True,
 
 
     # validate dataset
     # SyntheticFaceDataset, SecuencialSyntheticFaceDataset
-    val_data = SecuencialSyntheticFaceDataset(
-        data=FactoryDataset.factory(
-            pathname=args.data,
-            name=args.name_dataset,
-            idenselect=idenselect,
-            subset=FactoryDataset.validation,
-            download=True
-            ),
-        pathnameback=args.databack,
-        ext='jpg',
-        count=testiteration,
-        num_channels=num_channels,
-        iluminate=True, angle=30, translation=0.2, warp=0.1, factor=0.2,
-        transform_data=get_transforms_aug( imsize ),
-        transform_image=get_transforms_det( imsize ),
-        )
+    # val_data = SecuencialSyntheticFaceDataset(
+    #     data=FactoryDataset.factory(
+    #         pathname=args.data,
+    #         name=args.name_dataset,
+    #         idenselect=idenselect,
+    #         subset=FactoryDataset.validation,
+    #         download=True
+    #         ),
+        # pathnameback=args.databack,
+        # ext='jpg',
+        # count=testiteration,
+        # num_channels=num_channels,
+        # iluminate=True, angle=30, translation=0.2, warp=0.1, factor=0.2,
+        # transform_data=get_transforms_aug( imsize ),
+        # transform_image=get_transforms_det( imsize ),
+        # )
 
-    val_loader = DataLoader(val_data, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=network.cuda, drop_last=False)
+    val_loader = DataLoader(val_data, batch_size=32, shuffle=False, num_workers=8, pin_memory=True)
 
     # print neural net class
     print('SEG-Torch: {}'.format(datetime.datetime.now()) )
